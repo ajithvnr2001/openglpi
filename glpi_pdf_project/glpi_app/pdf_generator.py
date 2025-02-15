@@ -66,19 +66,19 @@ class PDFGenerator:
 
     # setup_styles is NO LONGER NEEDED
 
-    def generate_report(self, title: str, query: str, result: str, source_info: List[Dict]):
-        """Generates a PDF report with ReportLab and uploads to Wasabi S3."""
+    def generate_report(self, title: str, result: str, source_info: List[Dict]):
+        """Generates a PDF report with ReportLab and uploads to Wasabi S3.
+
+        Args:
+            title: The title of the PDF.
+            result: The summarized text from the LLM.
+            source_info: List of dictionaries with source information.
+        """
         elements = []
 
         # Title (Centered)
         elements.append(Paragraph(title, self.styles['Heading1']))
         elements.append(Spacer(1, 0.2 * inch))
-
-        # Query
-        # elements.append(Paragraph("Query:", self.styles['Heading2'])) #removed query
-        # elements.append(Paragraph(query, self.styles['Normal']))
-        # elements.append(Spacer(1, 0.2 * inch))
-
 
         # Result (Parsed into sections and bullet points)
         elements.append(Paragraph("Result:", self.styles['Heading2']))
