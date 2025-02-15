@@ -8,7 +8,7 @@ from langchain_huggingface import HuggingFaceEmbeddings  # Changed import
 
 
 class LLMService:
-    def __init__(self, model_name: str = "DeepSeek-R1-Distill-Llama-70B"):  # Default to a Llama3 model
+    def __init__(self, model_name: str = "Meta-Llama-3-1-8B-Instruct-FP8"):  # Default to a Llama3 model
         self.model_name = model_name
         self.akash_api_key = os.environ.get("AKASH_API_KEY")
         self.api_base = os.environ.get("AKASH_API_BASE", "https://chatapi.akash.network/api/v1")
