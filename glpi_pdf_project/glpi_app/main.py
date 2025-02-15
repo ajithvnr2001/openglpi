@@ -31,9 +31,9 @@ async def process_ticket(ticket_id: int):
 
         # --- IMPROVED PROMPT (Even More Specific) ---
         query = f"""
-Analyze the following GLPI ticket content and provide a concise, well-structured summary.  DO NOT add any extra text or filler.  Focus ONLY on summarizing the provided information.
+Analyze the following GLPI ticket content and provide a concise summary.  DO NOT add any extra text or filler.  Focus ONLY on summarizing the provided information.
 
-Include the following sections:
+Include these sections:
 
 1.  **Problem Description:** Describe the issue (what, when, who, where).
 2.  **Troubleshooting Steps:** List the steps taken (use bullet points).
@@ -54,15 +54,16 @@ GLPI Ticket Content:
         # PDF Generation
         pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
         source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
-        pdf_generator.generate_report( # TRIPLE-CHECKED: source_info is here!
-            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info
+        pdf_generator.generate_report(
+            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # Pass ONLY the result
         )
         print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
 
     except Exception as e:
         print(f"Error processing ticket {ticket_id}: {e}")
 
-
+    finally:
+      glpi.kill_session() # session will be killed.
 
 def post_process_llm_output(text: str) -> str:
     """Cleans up the LLM output by removing unwanted text and empty bullets."""
@@ -73,7 +74,6 @@ def post_process_llm_output(text: str) -> str:
     text = re.sub(r"However, it is assumed that a ticket ID exists in the actual GLPI ticket\..*I don't know\.", "", text, flags=re.IGNORECASE)
     text = re.sub(r"No ticket ID is provided in the given content.*Ticket ID:  \(Unknown\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"Note: The provided content does not include a ticket ID\..*I don't know", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"No further information is provided.*", "", text, flags=re.IGNORECASE)
 
     # 2. Remove empty bullet points and leading/trailing whitespace
     lines = text.split("\n")
