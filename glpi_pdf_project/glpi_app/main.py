@@ -55,15 +55,13 @@ GLPI Ticket Content:
         pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
         source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
         pdf_generator.generate_report(
-            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # Pass ONLY the result
+            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # CORRECTED:  Pass source_info
         )
         print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
 
     except Exception as e:
         print(f"Error processing ticket {ticket_id}: {e}")
 
-    # finally: # REMOVE THE finally BLOCK ENTIRELY
-    #   glpi.kill_session() # session will be killed.
 
 def post_process_llm_output(text: str) -> str:
     """Cleans up the LLM output by removing unwanted text and empty bullets."""
