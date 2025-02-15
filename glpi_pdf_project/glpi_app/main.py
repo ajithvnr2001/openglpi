@@ -54,8 +54,8 @@ GLPI Ticket Content:
         # PDF Generation
         pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
         source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
-        pdf_generator.generate_report(
-            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # CORRECTED: Pass source_info
+        pdf_generator.generate_report( # TRIPLE-CHECKED: source_info is here!
+            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info
         )
         print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
 
