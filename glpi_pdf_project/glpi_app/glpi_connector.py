@@ -52,11 +52,23 @@ class GLPIConnector:
             return False
 
     def _ensure_session(self):
-        """Ensures that a valid session token exists before making API calls."""
-        if not self.session_token:
-            if not self.init_session():
-                return False  # Session initialization failed
-        return True
+        """Ensures that a valid session token exists before making API calls.
+           Re-initializes the session if necessary.
+        """
+        if self.session_token:
+            # Actively check session validity using getMyEntities
+            try:
+                url = f"{self.glpi_url}/getMyEntities"
+                response = requests.get(url, headers=self.headers)
+                response.raise_for_status()  # Will raise for 401, etc.
+                return True  # Session is valid
+
+            except requests.exceptions.RequestException:
+                print("GLPI session is invalid. Re-initializing...")
+                self.session_token = None  # Clear invalid token
+
+        # If no token, or token is invalid, re-initialize
+        return self.init_session()
 
     def get_tickets(self, range_str:str="0-10") -> List[Dict]:
         """Retrieves a list of tickets from GLPI."""
