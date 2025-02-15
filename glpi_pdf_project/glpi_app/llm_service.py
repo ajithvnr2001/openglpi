@@ -3,8 +3,8 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from unstructured.partition.html import partition_html
 from typing import List, Dict
-from langchain_community.llms import OpenAI  # Changed import
-from langchain_community.embeddings import HuggingFaceEmbeddings  # Changed import
+from langchain_openai import OpenAI  # Import from langchain_openai
+from langchain_community.embeddings import HuggingFaceEmbeddings  # Import from langchain_community
 
 
 class LLMService:
@@ -17,9 +17,9 @@ class LLMService:
             raise ValueError("AKASH_API_KEY environment variable not set.")
 
         self.llm = OpenAI(
-            model_name=self.model_name,
-            openai_api_key=self.akash_api_key,
-            openai_api_base=self.api_base,
+            model=self.model_name,  # Use 'model' instead of 'model_name'
+            api_key=self.akash_api_key,  # Use 'api_key' instead of 'openai_api_key'
+            base_url=self.api_base,  # Use 'base_url' instead of 'openai_api_base'
             temperature=0.2,
             max_tokens=500
         )
@@ -44,7 +44,7 @@ class LLMService:
         qa = RetrievalQA.from_chain_type(
             llm=self.llm, chain_type="stuff", retriever=db.as_retriever(search_kwargs={'k': 1})
         )
-        result = qa.invoke({"query":query}) # using invoke
+        result = qa.invoke({"query": query})["result"] # Use invoke and get result
         return result
 
     def rag_completion(self, documents, query):
@@ -75,4 +75,4 @@ class LLMService:
         """Completes a prompt using the OpenAI-compatible API."""
         if context:
           prompt = context + prompt
-        return self.llm.invoke(prompt) # using invoke
+        return self.llm.invoke(prompt)
