@@ -12,3 +12,4 @@ boto3
 reportlab
 openai
 sentence-transformers
+langchain-openai
