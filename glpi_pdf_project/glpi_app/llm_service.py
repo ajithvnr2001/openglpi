@@ -4,7 +4,7 @@ from langchain.chains import RetrievalQA
 from unstructured.partition.html import partition_html
 from typing import List, Dict
 from langchain_openai import OpenAI
-from langchain_community.embeddings import HuggingFaceEmbeddings  # Changed import
+from langchain_huggingface import HuggingFaceEmbeddings  # Changed import
 
 
 class LLMService:
