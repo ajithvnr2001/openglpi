@@ -1,120 +1,122 @@
-import os
-from fastapi import FastAPI, Request, BackgroundTasks
-from glpi_connector import GLPIConnector
-from llm_service import LLMService
-from pdf_generator import PDFGenerator
-from dotenv import load_dotenv
-from typing import Dict, Any, List
-import uvicorn
+import requests
 import json
-import re  # Import the regular expression module
+from typing import List, Dict, Optional
 
-load_dotenv()
+class GLPIConnector:
+    def __init__(self, glpi_url: str, app_token: str, user_token:Optional[str]=None):
+        self.glpi_url = glpi_url  # This is now the BASE URL, ending in /apirest.php
+        self.app_token = app_token
+        self.headers = {
+            "Content-Type": "application/json",
+            "App-Token": self.app_token,
+        }
+        self.session_token = None
+        self.user_token=user_token
 
-app = FastAPI()
+    def init_session(self) -> bool:
+        """Initializes a GLPI session and gets the session token."""
+        # Construct the FULL URL for initSession
+        init_url = f"{self.glpi_url}/initSession"  # CORRECT: Appends /initSession
+        if self.user_token:
+            self.headers["Authorization"]=f"user_token {self.user_token}"
+        try:
+            response = requests.get(init_url, headers=self.headers)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            self.session_token = response.json().get("session_token")
+            if self.session_token:
+                self.headers["Session-Token"] = self.session_token
+                if "Authorization" in self.headers:
+                  del self.headers["Authorization"]
+                return True
+            else:
+                print("Error: Could not initialize GLPI session.")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"Error initializing session: {e}")
+            return False
 
-glpi_url = os.getenv("GLPI_URL")
-app_token = os.getenv("GLPI_APP_TOKEN")
-user_token = os.getenv("GLPI_USER_TOKEN")
-glpi = GLPIConnector(glpi_url, app_token, user_token)
-llm_service = LLMService()
+    def kill_session(self) -> bool:
+        """Kills the current GLPI session"""
+        # Construct the FULL URL for killSession
+        kill_url = f"{self.glpi_url}/killSession" # CORRECT: Appends /killSession
 
-async def process_ticket(ticket_id: int):
-    """Fetches ticket details, processes with LLM, and generates PDF."""
-    try:
-        # Fetch Ticket Details
-        ticket = glpi.get_ticket(ticket_id)
-        if not ticket:
-            print(f"Error: Could not retrieve ticket with ID {ticket_id}")
-            return
-        tickets=[ticket] #making a list to keep same format with previous code.
+        if not self.session_token:
+          return True
 
-        # --- IMPROVED PROMPT (Even More Specific) ---
-        query = f"""
-Analyze the following GLPI ticket content and provide a concise, well-structured summary.  DO NOT add any extra text or filler.  Focus ONLY on summarizing the provided information.
+        try:
+            response = requests.get(kill_url, headers=self.headers)
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            print(f"Error killing session: {e}")
+            return False
 
-Include the following sections:
-
-1.  **Problem Description:** Describe the issue (what, when, who, where).
-2.  **Troubleshooting Steps:** List the steps taken (use bullet points).
-3.  **Solution:** Describe the solution (if any).
-4.  **Key Information:** Do not mention or guess the Ticket ID.
-
-GLPI Ticket Content:
-{ticket.get('content',"")}
+    def _ensure_session(self):
+        """Ensures that a valid session token exists before making API calls.
+           Re-initializes the session if necessary.
         """
-        # --- END IMPROVED PROMPT ---
+        if self.session_token:
+            # Actively check session validity using getMyEntities
+            try:
+                url = f"{self.glpi_url}/getMyEntities"
+                response = requests.get(url, headers=self.headers)
+                response.raise_for_status()  # Will raise for 401, etc.
+                return True  # Session is valid
 
-        rag_result = llm_service.rag_completion(tickets, query)
-        print(f"RAG Result: {rag_result}")
+            except requests.exceptions.RequestException:
+                print("GLPI session is invalid. Re-initializing...")
+                self.session_token = None  # Clear invalid token
 
-        # --- POST-PROCESSING ---
-        cleaned_result = post_process_llm_output(rag_result)
+        # If no token, or token is invalid, re-initialize
+        return self.init_session()
 
-        # PDF Generation
-        pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
-        source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
-        pdf_generator.generate_report(
-            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # Pass ONLY the result
-        )
-        print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
+    def get_tickets(self, range_str:str="0-10") -> List[Dict]:
+        """Retrieves a list of tickets from GLPI."""
+        if not self._ensure_session(): # Check for session
+            return []
 
-    except Exception as e:
-        print(f"Error processing ticket {ticket_id}: {e}")
+        # Construct the FULL URL for Ticket
+        tickets_url = f"{self.glpi_url}/Ticket?range={range_str}" # CORRECT: Appends /Ticket
 
-    # finally: # REMOVE THE finally BLOCK ENTIRELY
-    #   glpi.kill_session() # session will be killed.
+        try:
+            response = requests.get(tickets_url, headers=self.headers)
+            response.raise_for_status()
+            tickets = response.json()
 
-def post_process_llm_output(text: str) -> str:
-    """Cleans up the LLM output by removing unwanted text and empty bullets."""
+            # Extract relevant ticket data.  Adapt this based on your needs.
+            extracted_tickets = []
+            for ticket in tickets:
+                extracted_tickets.append({
+                    "id": ticket.get("id"),
+                    "name": ticket.get("name"),
+                    "content": ticket.get("content"),  # May contain HTML
+                    "status": ticket.get("status"),
+                    "date": ticket.get("date"),
+                    # Add other relevant fields here.
+                })
+            return extracted_tickets
 
-    # 1. Remove generic/repetitive phrases (using regular expressions)
-    text = re.sub(r"Please let me know if you need any further assistance\.?|I'm here to help\.?|Best regards, \[Your Name] IT Support Assistant\.?", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"If you have any further questions or need any additional assistance.*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"However, it is assumed that a ticket ID exists in the actual GLPI ticket\..*I don't know\.", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"No ticket ID is provided in the given content.*Ticket ID:  \(Unknown\)", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"Note: The provided content does not include a ticket ID\..*I don't know", "", text, flags=re.IGNORECASE)
+        except requests.exceptions.RequestException as e:
+            print(f"Error retrieving tickets: {e}")
+            return []
 
-    # 2. Remove empty bullet points and leading/trailing whitespace
-    lines = text.split("\n")
-    cleaned_lines = []
-    for line in lines:
-        line = line.strip()
-        if line.startswith("*") and len(line) > 1:  # Keep non-empty bullets
-            cleaned_lines.append(line)
-        elif not line.startswith("*") and line: # Keep non-empty non-bullet lines.
-            cleaned_lines.append(line)
+    def get_ticket(self,id) -> Dict:
+        """Retrieves a list of tickets from GLPI."""
+        if not self._ensure_session(): # Check for session
+            return []
+        # Construct the FULL URL for a specific Ticket
+        tickets_url = f"{self.glpi_url}/Ticket/{id}" # CORRECT: Appends /Ticket/{id}
 
+        try:
+            response = requests.get(tickets_url, headers=self.headers)
+            response.raise_for_status()
+            ticket = response.json()
 
-    return "\n".join(cleaned_lines)
+            # Extract relevant ticket data.  Adapt this based on your needs.
 
-
-@app.post("/webhook")
-async def glpi_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Handles incoming webhook requests from GLPI."""
-    try:
-        data: List[Dict[str, Any]] = await request.json()
-        print(f"Received webhook data: {data}")  # Log the raw webhook data
-
-        for event in data:
-            if event.get("event") == "add" and event.get("itemtype") == "Ticket":
-                ticket_id = int(event.get("items_id"))  # Ensure it's an integer
-                background_tasks.add_task(process_ticket, ticket_id) #process in background
-                return {"message": f"Ticket processing initiated for ID: {ticket_id}"}
-
-        return {"message": "Webhook received, but no relevant event found."}
-
-    except json.JSONDecodeError:
-        return {"error": "Invalid JSON payload"}
-    except Exception as e:
-      return {"error":str(e)}
-
-@app.get("/test_llm")
-async def test_llm_endpoint():
-    test_prompt = "what is the capital of Assyria"
-    response = llm_service.complete(prompt=test_prompt)
-    return {"response":response}
+            return ticket
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001) # use any port for your application.
+        except requests.exceptions.RequestException as e:
+            print(f"Error retrieving tickets: {e}")
+            return []
