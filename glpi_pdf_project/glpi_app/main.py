@@ -31,9 +31,9 @@ async def process_ticket(ticket_id: int):
 
         # --- IMPROVED PROMPT (Even More Specific) ---
         query = f"""
-Analyze the following GLPI ticket content and provide a concise summary.  DO NOT add any extra text or filler.  Focus ONLY on summarizing the provided information.
+Analyze the following GLPI ticket content and provide a concise, well-structured summary.  DO NOT add any extra text or filler.  Focus ONLY on summarizing the provided information.
 
-Include these sections:
+Include the following sections:
 
 1.  **Problem Description:** Describe the issue (what, when, who, where).
 2.  **Troubleshooting Steps:** List the steps taken (use bullet points).
@@ -62,8 +62,8 @@ GLPI Ticket Content:
     except Exception as e:
         print(f"Error processing ticket {ticket_id}: {e}")
 
-    finally:
-      glpi.kill_session() # session will be killed.
+    # finally: # REMOVE THE finally BLOCK ENTIRELY
+    #   glpi.kill_session() # session will be killed.
 
 def post_process_llm_output(text: str) -> str:
     """Cleans up the LLM output by removing unwanted text and empty bullets."""
