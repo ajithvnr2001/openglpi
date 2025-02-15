@@ -9,11 +9,15 @@ from botocore.exceptions import ClientError
 from typing import List, Dict
 
 class PDFGenerator:
+    _styles_setup = False  # Class-level variable
+
     def __init__(self, filename: str):
         self.filename = filename
         self.doc = SimpleDocTemplate(self.filename, pagesize=letter)
         self.styles = getSampleStyleSheet()
-        self.setup_styles()
+        if not PDFGenerator._styles_setup:  # Check if styles are already set up
+            self.setup_styles()
+            PDFGenerator._styles_setup = True # Set the flag
 
         # Wasabi S3 Configuration
         self.s3_client = boto3.client(
