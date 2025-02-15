@@ -55,12 +55,13 @@ GLPI Ticket Content:
         pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
         source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
         pdf_generator.generate_report(
-            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # CORRECTED:  Pass source_info
+            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # CORRECTED: Pass source_info
         )
         print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
 
     except Exception as e:
         print(f"Error processing ticket {ticket_id}: {e}")
+
 
 
 def post_process_llm_output(text: str) -> str:
@@ -72,6 +73,7 @@ def post_process_llm_output(text: str) -> str:
     text = re.sub(r"However, it is assumed that a ticket ID exists in the actual GLPI ticket\..*I don't know\.", "", text, flags=re.IGNORECASE)
     text = re.sub(r"No ticket ID is provided in the given content.*Ticket ID:  \(Unknown\)", "", text, flags=re.IGNORECASE)
     text = re.sub(r"Note: The provided content does not include a ticket ID\..*I don't know", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"No further information is provided.*", "", text, flags=re.IGNORECASE)
 
     # 2. Remove empty bullet points and leading/trailing whitespace
     lines = text.split("\n")
