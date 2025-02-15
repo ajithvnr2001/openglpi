@@ -3,8 +3,8 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from unstructured.partition.html import partition_html
 from typing import List, Dict
-from langchain.llms import OpenAI
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.llms import OpenAI  # Changed import
+from langchain_community.embeddings import HuggingFaceEmbeddings  # Changed import
 
 
 class LLMService:
@@ -20,14 +20,13 @@ class LLMService:
             model_name=self.model_name,
             openai_api_key=self.akash_api_key,
             openai_api_base=self.api_base,
-            temperature=0.2,  # Adjust as needed
-            max_tokens=500   # Adjust as needed
+            temperature=0.2,
+            max_tokens=500
         )
 
     def get_embedding_function(self):
         """Returns the HuggingFace embedding function for BAAI/bge-large-en-v1.5."""
         return HuggingFaceEmbeddings(model_name="BAAI/bge-large-en-v1.5")
-
 
     def create_vectorstore(self, chunks: List[Dict]):
         """Creates a Chroma vector store from a list of text chunks."""
@@ -43,9 +42,9 @@ class LLMService:
     def query_llm(self, db, query: str):
         """Queries the LLM using RetrievalQA."""
         qa = RetrievalQA.from_chain_type(
-            llm=self.llm, chain_type="stuff", retriever=db.as_retriever()
+            llm=self.llm, chain_type="stuff", retriever=db.as_retriever(search_kwargs={'k': 1})
         )
-        result = qa.run(query)
+        result = qa.invoke({"query":query}) # using invoke
         return result
 
     def rag_completion(self, documents, query):
@@ -76,4 +75,4 @@ class LLMService:
         """Completes a prompt using the OpenAI-compatible API."""
         if context:
           prompt = context + prompt
-        return self.llm.invoke(prompt) # using invoke method
+        return self.llm.invoke(prompt) # using invoke
