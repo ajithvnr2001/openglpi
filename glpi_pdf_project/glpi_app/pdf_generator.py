@@ -15,9 +15,9 @@ class PDFGenerator:
         self.filename = filename
         self.doc = SimpleDocTemplate(self.filename, pagesize=letter)
         self.styles = getSampleStyleSheet()
-        if not PDFGenerator._styles_setup:  # Check if styles are already set up
+        if not PDFGenerator._styles_setup:  # CORRECT: Use ClassName._styles_setup
             self.setup_styles()
-            PDFGenerator._styles_setup = True # Set the flag
+            PDFGenerator._styles_setup = True  # CORRECT: Use ClassName._styles_setup
 
         # Wasabi S3 Configuration
         self.s3_client = boto3.client(
