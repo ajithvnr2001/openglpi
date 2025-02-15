@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from typing import Dict, Any, List
 import uvicorn
 import json
+import re  # Import the regular expression module
 
 load_dotenv()
 
@@ -28,37 +29,33 @@ async def process_ticket(ticket_id: int):
             return
         tickets=[ticket] #making a list to keep same format with previous code.
 
-        # --- IMPROVED PROMPT ---
+        # --- IMPROVED PROMPT (Even More Specific) ---
         query = f"""
-You are an expert IT support assistant.  Analyze the following GLPI ticket and provide a concise, well-structured summary.
+Analyze the following GLPI ticket content and provide a concise summary.  DO NOT add any extra text or filler.  Focus ONLY on summarizing the provided information.
 
-Include the following sections in your summary:
+Include these sections:
 
-1.  **Problem Description:** Briefly describe the issue, including:
-    *   What is the problem?
-    *   When did it start?
-    *   Who is affected?
-    *   Where are they affected (location)?
+1.  **Problem Description:** Describe the issue (what, when, who, where).
+2.  **Troubleshooting Steps:** List the steps taken (use bullet points).
+3.  **Solution:** Describe the solution (if any).
+4.  **Key Information:** Do not mention or guess the Ticket ID.
 
-2.  **Troubleshooting Steps:** List the steps already taken to diagnose the issue. Use bullet points.
-
-3.  **Solution:** If a solution is provided in the ticket, describe it clearly. If no solution is given, state "No solution provided."
-
-4. **Key Information:**
-    * Ticket ID.
-
-Here is the GLPI ticket content:
+GLPI Ticket Content:
 {ticket.get('content',"")}
         """
         # --- END IMPROVED PROMPT ---
+
         rag_result = llm_service.rag_completion(tickets, query)
         print(f"RAG Result: {rag_result}")
+
+        # --- POST-PROCESSING ---
+        cleaned_result = post_process_llm_output(rag_result)
 
         # PDF Generation
         pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
         source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
         pdf_generator.generate_report(
-            f"Ticket Analysis - #{ticket_id}", query, rag_result, source_info  # Pass the original query here
+            f"Ticket Analysis - #{ticket_id}", cleaned_result, source_info  # Pass ONLY the result
         )
         print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
 
@@ -67,6 +64,30 @@ Here is the GLPI ticket content:
 
     finally:
       glpi.kill_session() # session will be killed.
+
+def post_process_llm_output(text: str) -> str:
+    """Cleans up the LLM output by removing unwanted text and empty bullets."""
+
+    # 1. Remove generic/repetitive phrases (using regular expressions)
+    text = re.sub(r"Please let me know if you need any further assistance\.?|I'm here to help\.?|Best regards, \[Your Name] IT Support Assistant\.?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"If you have any further questions or need any additional assistance.*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"However, it is assumed that a ticket ID exists in the actual GLPI ticket\..*I don't know\.", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"No ticket ID is provided in the given content.*Ticket ID:  \(Unknown\)", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"Note: The provided content does not include a ticket ID\..*I don't know", "", text, flags=re.IGNORECASE)
+
+    # 2. Remove empty bullet points and leading/trailing whitespace
+    lines = text.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        line = line.strip()
+        if line.startswith("*") and len(line) > 1:  # Keep non-empty bullets
+            cleaned_lines.append(line)
+        elif not line.startswith("*") and line: # Keep non-empty non-bullet lines.
+            cleaned_lines.append(line)
+
+
+    return "\n".join(cleaned_lines)
+
 
 @app.post("/webhook")
 async def glpi_webhook(request: Request, background_tasks: BackgroundTasks):
