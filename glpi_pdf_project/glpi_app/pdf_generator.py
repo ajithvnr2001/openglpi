@@ -8,16 +8,35 @@ import boto3
 from botocore.exceptions import ClientError
 from typing import List, Dict
 
-class PDFGenerator:
-    _styles_setup = False  # Class-level variable
+# --- Define Styles OUTSIDE the class, at the module level ---
+_styles = getSampleStyleSheet()
+_styles.add(ParagraphStyle(name='Heading1',
+                              parent=_styles['Heading1'],
+                              fontSize=16,
+                              spaceAfter=12))
+_styles.add(ParagraphStyle(name='Heading2',
+                              parent=_styles['Heading2'],
+                              fontSize=14,
+                              spaceBefore=10,
+                              spaceAfter=6))
+_styles.add(ParagraphStyle(name='Normal_C',
+                              parent=_styles['Normal'],
+                                alignment=TA_CENTER,
+                                spaceAfter=6))
+_styles.add(ParagraphStyle(name='Bullet',
+                              parent=_styles['Normal'],
+                                bulletIndent=18,
+                              leftIndent=36,
+                              spaceBefore=3,
+                              spaceAfter=3))
+# --- End of Style Definitions ---
 
+
+class PDFGenerator:
     def __init__(self, filename: str):
         self.filename = filename
         self.doc = SimpleDocTemplate(self.filename, pagesize=letter)
-        self.styles = getSampleStyleSheet()
-        if not PDFGenerator._styles_setup:  # CORRECT: Use ClassName._styles_setup
-            self.setup_styles()
-            PDFGenerator._styles_setup = True  # CORRECT: Use ClassName._styles_setup
+        self.styles = _styles  # Use the module-level styles
 
         # Wasabi S3 Configuration
         self.s3_client = boto3.client(
@@ -31,29 +50,7 @@ class PDFGenerator:
         if not all([self.bucket_name, self.s3_client]):
            raise ValueError("Wasabi S3 environment variables not set.")
 
-    def setup_styles(self):
-        """Define custom paragraph styles."""
-        self.styles.add(ParagraphStyle(name='Heading1',
-                                      parent=self.styles['Heading1'],
-                                      fontSize=16,
-                                      spaceAfter=12))
-        self.styles.add(ParagraphStyle(name='Heading2',
-                                      parent=self.styles['Heading2'],
-                                      fontSize=14,
-                                      spaceBefore=10,
-                                      spaceAfter=6))
-        self.styles.add(ParagraphStyle(name='Normal_C',
-                                      parent=self.styles['Normal'],
-                                        alignment=TA_CENTER,
-                                        spaceAfter=6))
-
-        self.styles.add(ParagraphStyle(name='Bullet',
-                                      parent=self.styles['Normal'],
-                                        bulletIndent=18,
-                                      leftIndent=36,
-                                      spaceBefore=3,
-                                      spaceAfter=3))
-
+    # setup_styles is NO LONGER NEEDED
 
     def generate_report(self, title: str, query: str, result: str, source_info: List[Dict]):
         """Generates a PDF report with ReportLab and uploads to Wasabi S3."""
