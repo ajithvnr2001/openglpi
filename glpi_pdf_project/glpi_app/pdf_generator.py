@@ -1,7 +1,7 @@
 import os
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle  # Import ParagraphStyle directly
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 import boto3
@@ -9,26 +9,38 @@ from botocore.exceptions import ClientError
 from typing import List, Dict
 
 # --- Define Styles OUTSIDE the class, at the module level ---
-_styles = getSampleStyleSheet()
-_styles.add(ParagraphStyle(name='Heading1',
-                              parent=_styles['Heading1'],
-                              fontSize=16,
-                              spaceAfter=12))
-_styles.add(ParagraphStyle(name='Heading2',
-                              parent=_styles['Heading2'],
-                              fontSize=14,
-                              spaceBefore=10,
-                              spaceAfter=6))
-_styles.add(ParagraphStyle(name='Normal_C',
-                              parent=_styles['Normal'],
-                                alignment=TA_CENTER,
-                                spaceAfter=6))
-_styles.add(ParagraphStyle(name='Bullet',
-                              parent=_styles['Normal'],
-                                bulletIndent=18,
-                              leftIndent=36,
-                              spaceBefore=3,
-                              spaceAfter=3))
+#  NO getSampleStyleSheet() call here!
+_styles = {}  # Start with an empty dictionary
+
+_styles['Heading1'] = ParagraphStyle(
+    name='Heading1',
+    fontSize=16,
+    spaceAfter=12,
+)
+_styles['Heading2'] = ParagraphStyle(
+    name='Heading2',
+    fontSize=14,
+    spaceBefore=10,
+    spaceAfter=6,
+)
+
+_styles['Normal_C'] = ParagraphStyle(
+    name='Normal_C',
+    alignment=TA_CENTER,
+    spaceAfter=6,
+)
+
+_styles['Bullet'] = ParagraphStyle(
+    name='Bullet',
+    bulletIndent=18,
+    leftIndent=36,
+    spaceBefore=3,
+    spaceAfter=3,
+)
+
+_styles['Normal'] = ParagraphStyle( #we need a Normal style
+    name='Normal',
+)
 # --- End of Style Definitions ---
 
 
