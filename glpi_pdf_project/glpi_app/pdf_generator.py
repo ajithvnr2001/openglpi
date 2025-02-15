@@ -1,21 +1,22 @@
 import os
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable
-from reportlab.lib.styles import ParagraphStyle  # Import ParagraphStyle directly
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_LEFT, TA_CENTER  # Import TA_CENTER
 import boto3
 from botocore.exceptions import ClientError
 from typing import List, Dict
 
 # --- Define Styles OUTSIDE the class, at the module level ---
-#  NO getSampleStyleSheet() call here!
-_styles = {}  # Start with an empty dictionary
+# --- Define Styles OUTSIDE the class ---
+_styles = {}
 
 _styles['Heading1'] = ParagraphStyle(
     name='Heading1',
     fontSize=16,
     spaceAfter=12,
+    alignment=TA_CENTER,  # Center the title
 )
 _styles['Heading2'] = ParagraphStyle(
     name='Heading2',
@@ -32,16 +33,18 @@ _styles['Normal_C'] = ParagraphStyle(
 
 _styles['Bullet'] = ParagraphStyle(
     name='Bullet',
-    bulletIndent=18,
-    leftIndent=36,
+    fontSize=11,
+    leftIndent=30,
     spaceBefore=3,
-    spaceAfter=3,
 )
 
-_styles['Normal'] = ParagraphStyle( #we need a Normal style
+_styles['Normal'] = ParagraphStyle(  # we need a Normal style
     name='Normal',
+    fontSize=11,
+    spaceAfter=6,
 )
 # --- End of Style Definitions ---
+
 
 
 class PDFGenerator:
@@ -68,25 +71,29 @@ class PDFGenerator:
         """Generates a PDF report with ReportLab and uploads to Wasabi S3."""
         elements = []
 
-        # Title
+        # Title (Centered)
         elements.append(Paragraph(title, self.styles['Heading1']))
-        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Spacer(1, 0.2 * inch))
 
         # Query
-        elements.append(Paragraph(f"<b>Query:</b> {query}", self.styles['Heading2']))
-        elements.append(Spacer(1, 0.1*inch))
+        elements.append(Paragraph("Query:", self.styles['Heading2']))
+        elements.append(Paragraph(query, self.styles['Normal']))
+        elements.append(Spacer(1, 0.2 * inch))
 
-        # Result (Process for potential bullet points)
-        elements.append(Paragraph(f"<b>Result:</b>", self.styles['Heading2']))
-        self.add_content_with_bullets(elements, result)
-        elements.append(Spacer(1, 0.2*inch))
+
+        # Result (Parsed into sections and bullet points)
+        elements.append(Paragraph("Result:", self.styles['Heading2']))
+        elements.append(Spacer(1, 0.1 * inch))
+        self._add_structured_result(elements, result) # Improved parsing
+        elements.append(Spacer(1, 0.2 * inch))
 
         # Source Information
-        elements.append(Paragraph("<b>Source Information:</b>", self.styles['Heading2']))
+        elements.append(Paragraph("Source Information:", self.styles['Heading2']))
+        elements.append(Spacer(1, 0.1 * inch))
         for source in source_info:
             elements.append(Paragraph(f"Source ID: {source.get('source_id', 'N/A')}", self.styles['Normal']))
             elements.append(Paragraph(f"Source Type: {source.get('source_type', 'N/A')}", self.styles['Normal']))
-            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Spacer(1, 0.1 * inch))  # Consistent spacing
 
         try:
           # Build PDF
@@ -113,12 +120,23 @@ class PDFGenerator:
             print(f"Error uploading to S3: {e}")
             raise
 
-    def add_content_with_bullets(self, elements, text):
-        """Adds content to the PDF, handling potential bullet points."""
-        lines = text.split("\n")
-        for line in lines:
-            line = line.strip()
-            if line.startswith(("* ", "- ")):  # Simple bullet point detection
-                elements.append(Paragraph(line[2:].strip(), self.styles['Bullet'])) #remove "* "
+    def _add_structured_result(self, elements, result_text):
+        """Parses the LLM result and adds it to the PDF with proper formatting."""
+        sections = result_text.split("**")  # Split into sections based on bold markers
+        # print(sections)
+        for i in range(1, len(sections), 2):  # Iterate through section titles
+            title = sections[i].strip()
+            content = sections[i+1].strip() if i + 1 < len(sections) else ""
+
+            elements.append(Paragraph(title, self.styles['Heading2'])) # Add section title
+
+            # Handle bullet points within the section content:
+            if title in ["Troubleshooting Steps:", "Solution:"]:
+                items = [item.strip() for item in content.split("*") if item.strip()]
+                list_flowable = ListFlowable(
+                    [Paragraph(item, self.styles['Bullet']) for item in items],
+                    bulletType='bullet'
+                )
+                elements.append(list_flowable)
             else:
-                elements.append(Paragraph(line, self.styles['Normal']))
+                elements.append(Paragraph(content, self.styles['Normal'])) #regular text
