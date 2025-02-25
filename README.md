@@ -4,6 +4,7 @@ This project provides a FastAPI application that integrates with GLPI, retrieves
 
 Project Structure:
 
+```bash
 glpi_pdf_project/
 ├── glpi_app/
 │ ├── .env # Environment variables (IMPORTANT: See setup below)
@@ -15,6 +16,7 @@ glpi_pdf_project/
 │ └── requirements.txt # Python dependencies
 │
 └── docker-compose.yml # Docker Compose configuration for running the application
+```
 
 
 Setup and Configuration:
