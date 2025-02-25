@@ -16,6 +16,7 @@ glpi_pdf_project/
 │
 └── docker-compose.yml # Docker Compose configuration for running the application
 
+
 Setup and Configuration:
 
 1.Environment Variables:
