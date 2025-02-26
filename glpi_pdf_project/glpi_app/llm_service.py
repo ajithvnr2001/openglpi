@@ -20,8 +20,8 @@ class LLMService:
             model=self.model_name,
             api_key=self.akash_api_key,
             base_url=self.api_base,
-            temperature=0.2,
-            max_tokens=1000  # Further increase max_tokens
+            temperature=0.0,  # Reduced temperature to 0.0
+            max_tokens=1000
         )
 
     def get_embedding_function(self):
@@ -42,7 +42,7 @@ class LLMService:
     def query_llm(self, db, query: str):
         """Queries the LLM using RetrievalQA."""
         qa = RetrievalQA.from_chain_type(
-            llm=self.llm, chain_type="stuff", retriever=db.as_retriever(search_kwargs={'k': 3}) # Increased k to 3
+            llm=self.llm, chain_type="stuff", retriever=db.as_retriever(search_kwargs={'k': 3})
         )
         result = qa.invoke({"query":query})["result"]
         return result
