@@ -20,7 +20,7 @@ glpi = GLPIConnector(glpi_url, app_token, user_token)
 llm_service = LLMService()
 
 async def process_ticket(ticket_id: int):
-    """Fetches ticket, processes with LLM, generates PDF (multi-step)."""
+    """Fetches ticket, processes with LLM + rules, generates PDF."""
     try:
         ticket = glpi.get_ticket(ticket_id)
         if not ticket:
@@ -29,7 +29,7 @@ async def process_ticket(ticket_id: int):
         tickets = [ticket]
         ticket_content = ticket.get('content', "")
 
-        # --- Step 1: Initial Summarization (Broad Strokes) ---
+        # --- Step 1: Initial Summarization (LLM) ---
         initial_query = f"""
 Analyze the following GLPI ticket content and produce a concise summary.
 AVOID ALL conversational phrases, introductions, and conclusions.
@@ -45,38 +45,49 @@ GLPI Ticket Content:
         """
         initial_result = llm_service.rag_completion(tickets, initial_query)
         print(f"Initial RAG Result: {initial_result}")
-        initial_result = post_process_llm_output(initial_result) # Clean up.
+        initial_result = post_process_llm_output(initial_result)  # Clean up.
 
-        # --- Step 2: Targeted Extraction for Key Information ---
-        key_info = {}  # Store extracted info here
+        # --- Step 2: Key Information Extraction (LLM + Rules) ---
+        key_info = {}
 
-        # Define prompts for each key information item
+        # Simplified, VERY direct prompts (no fluff)
         key_info_prompts = {
-            "affected_systems": "List the affected system(s) from the GLPI ticket content. Be concise.",
-            "error_messages": "Extract all error messages from the GLPI ticket content.  If none, respond with 'None'.",
-            "affected_users": "List all affected users from the GLPI ticket content. If none, respond with 'None'.",
-            "start_time": "What is the start time of the issue described in the GLPI ticket content?",
-            "suspected_causes": "List the suspected cause(s) of the issue from the GLPI ticket content. Be concise.",
-            "resolution_steps": "Briefly list the steps taken to *resolve* the issue (if different from troubleshooting) from the GLPI ticket content.",
+            "affected_systems": "Affected System(s):",  # Just the label!
+            "error_messages": "Error Message(s):",
+            "affected_users": "Affected Users:",
+            "start_time": "Start Time:",
+            "suspected_causes": "Suspected Cause(s):",
+            "resolution_steps": "Resolution Steps:",
         }
 
         for key, prompt in key_info_prompts.items():
-            full_prompt = f"{prompt}\n\nGLPI Ticket Content:\n{ticket_content}"
-            response = llm_service.complete(prompt=full_prompt) # No RAG here, just completion.
+            full_prompt = f"{prompt}\n{ticket_content}"  # Simpler prompt structure
+            response = llm_service.complete(prompt=full_prompt)
             print(f"Key Info ({key}) RAW Response: {response}")
-            key_info[key] = post_process_key_info_item(response) # Clean up *each item*.
+            key_info[key] = post_process_key_info_item(response, prompt) # Pass prompt for cleaning
             print(f"Key Info ({key}) Cleaned: {key_info[key]}")
 
 
-        # --- Step 3: Assemble and Generate PDF ---
+        # --- Rule-Based Extraction (Example: Error Messages) ---
+        # Augment/override LLM extraction with regex for reliability
+        error_matches = re.findall(r"```(.*?)```", ticket_content, re.DOTALL)  # Extract code blocks
+        if error_matches:
+            key_info["error_messages"] = "\n".join(error_matches) # Overwrite LLM result
 
+        # Rule-Based Extraction (Example: Affected Users)
+        user_matches = re.findall(r"\* ([\w\s]+) \([\w@\.]+\)", ticket_content)
+        if user_matches:
+             key_info['affected_users'] = "\n".join(user_matches)
+
+
+        # --- Step 3: Assemble and Generate PDF ---
         pdf_generator = PDFGenerator(f"glpi_ticket_{ticket_id}.pdf")
         source_info = [{"source_id": ticket_id, "source_type": "glpi_ticket"}]
         pdf_generator.generate_report(
             f"Ticket Analysis - #{ticket_id}",
-            initial_result,  # The initial summary (Problem, Steps, Solution)
+            initial_result,
             source_info,
-            key_info  # Pass the structured key_info dictionary
+            key_info
         )
         print(f"Report generated: glpi_ticket_{ticket_id}.pdf")
 
@@ -84,6 +95,7 @@ GLPI Ticket Content:
         print(f"Error processing ticket {ticket_id}: {e}")
     finally:
         glpi.kill_session()
+
 
 
 def post_process_llm_output(text: str) -> str:
@@ -104,12 +116,29 @@ def post_process_llm_output(text: str) -> str:
             cleaned_lines.append(line)
     return "\n".join(cleaned_lines)
 
-def post_process_key_info_item(text: str) -> str:
-    """Cleans a SINGLE key information item (removes extra text)."""
+
+def post_process_key_info_item(text: str, prompt: str) -> str:
+    """Cleans a SINGLE key information item (removes prompt, extra text)."""
     text = text.strip()
+    # Remove the prompt itself
+    text = text.replace(prompt, "").strip()
     # Remove any leading/trailing quotes or other non-alphanumeric characters
     text = re.sub(r"^[\W_]+|[\W_]+$", "", text)
+      # Remove any lines that starts with "Answer:"
+    lines = text.split("\n")
+    cleaned_lines = [line for line in lines if not line.strip().lower().startswith("answer:")]
+    text = "\n".join(cleaned_lines)
+    # Remove common LLM hallucination patterns
+    text = re.sub(r"(?i)note:.*", "", text)  # Remove "Note:" and following text
+    text = re.sub(r"(?i)therefore,.*", "", text) # Remove therefore
+    text = re.sub(r"(?i)the (.*?) are:.*", r"\1", text) # Remove the are
+    text = re.sub(r"(?i)```.*```", "", text) # Remove code blocks
+    text = re.sub(r"(?i)please let me know.*", "", text)
+    text = re.sub(r"(?i)i hope this helps.*", "", text)
+    text = re.sub(r'\(.*?\)', '', text) # Remove all the texts in parentheses
+    text = text.strip()
     return text
+
 
 
 @app.post("/webhook")
@@ -131,8 +160,6 @@ async def glpi_webhook(request: Request, background_tasks: BackgroundTasks):
         return {"error": "Invalid JSON payload"}
     except Exception as e:
         return {"error": str(e)}
-
-
 
 @app.get("/test_llm")
 async def test_llm_endpoint():
