@@ -33,11 +33,11 @@ _styles['Normal_C'] = ParagraphStyle(
 _styles['Bullet'] = ParagraphStyle(
     name='Bullet',
     fontSize=11,
-    leftIndent=30,
+    leftIndent=30,  # Ensure sufficient indentation
     spaceBefore=3,
 )
 
-_styles['Normal'] = ParagraphStyle(  # we need a Normal style
+_styles['Normal'] = ParagraphStyle(
     name='Normal',
     fontSize=11,
     spaceAfter=6,
@@ -64,16 +64,8 @@ class PDFGenerator:
         if not all([self.bucket_name, self.s3_client]):
            raise ValueError("Wasabi S3 environment variables not set.")
 
-    # setup_styles is NO LONGER NEEDED
-
     def generate_report(self, title: str, result: str, source_info: List[Dict]):
-        """Generates a PDF report with ReportLab and uploads to Wasabi S3.
-
-        Args:
-            title: The title of the PDF.
-            result: The summarized text from the LLM.
-            source_info: List of dictionaries with source information.
-        """
+        """Generates a PDF report, uploads to Wasabi S3, and cleans up."""
         elements = []
 
         # Title (Centered)
@@ -86,23 +78,22 @@ class PDFGenerator:
         self._add_structured_result(elements, result)
         elements.append(Spacer(1, 0.2 * inch))
 
+
         # Source Information
         elements.append(Paragraph("Source Information:", self.styles['Heading2']))
         elements.append(Spacer(1, 0.1 * inch))
         for source in source_info:
-            # Only need to add this once.
-            elements.append(Paragraph(f"Source ID: {source.get('source_id', 'N/A')}", self.styles['Normal']))
+            elements.append(Paragraph(f"Source ID: {source.get('source_id', 'N_A')}", self.styles['Normal']))
             elements.append(Paragraph(f"Source Type: glpi_ticket", self.styles['Normal']))
-            # No Spacer here, to avoid extra space
-            break # Added break, to avoid repetition.
+            break  # Only add source info once
 
 
         try:
-          # Build PDF
-          self.doc.build(elements)
-          # Upload to Wasabi
-          self.upload_to_s3(self.filename)
-          print(f"PDF generated and uploaded to Wasabi S3: {self.filename}")
+            # Build PDF
+            self.doc.build(elements)
+            # Upload to Wasabi
+            self.upload_to_s3(self.filename)
+            print(f"PDF generated and uploaded to Wasabi S3: {self.filename}")
 
         except ClientError as e:
             print(f"S3 Upload Error: {e}")
@@ -123,22 +114,21 @@ class PDFGenerator:
             raise
 
     def _add_structured_result(self, elements, result_text):
-        """Parses the LLM result and adds it to the PDF with proper formatting."""
-        sections = result_text.split("**")  # Split into sections based on bold markers
-        # print(sections)
-        for i in range(1, len(sections), 2):  # Iterate through section titles
+        """Parses the LLM result, adds it to PDF with headings/bullets."""
+        sections = result_text.split("**")
+        for i in range(1, len(sections), 2):
             title = sections[i].strip()
-            content = sections[i+1].strip() if i + 1 < len(sections) else ""
+            content = sections[i + 1].strip() if i + 1 < len(sections) else ""
 
-            elements.append(Paragraph(title, self.styles['Heading2'])) # Add section title
+            elements.append(Paragraph(title, self.styles['Heading2']))  # Apply Heading2 style
 
-            # Handle bullet points within the section content:
             if title in ["Troubleshooting Steps:", "Solution:"]:
                 items = [item.strip() for item in content.split("*") if item.strip()]
-                list_flowable = ListFlowable(
-                    [Paragraph(item, self.styles['Bullet']) for item in items],
-                    bulletType='bullet'
-                )
-                elements.append(list_flowable)
+                if items: # Check if the list is not empty
+                    list_flowable = ListFlowable(
+                        [Paragraph(item, self.styles['Bullet']) for item in items],
+                        bulletType='bullet'  # Ensure bulletType is set
+                    )
+                    elements.append(list_flowable)
             else:
-                elements.append(Paragraph(content, self.styles['Normal'])) #regular text
+                elements.append(Paragraph(content, self.styles['Normal']))
