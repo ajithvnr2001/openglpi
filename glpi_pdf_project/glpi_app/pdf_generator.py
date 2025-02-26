@@ -30,10 +30,10 @@ _styles['Normal_C'] = ParagraphStyle(
     spaceAfter=6,
 )
 
-_styles['Bullet'] = ParagraphStyle( #Ensure the style for bullet.
+_styles['Bullet'] = ParagraphStyle(
     name='Bullet',
     fontSize=11,
-    leftIndent=30,  # Ensure sufficient indentation
+    leftIndent=30,
     spaceBefore=3,
 )
 
@@ -64,26 +64,38 @@ class PDFGenerator:
         if not all([self.bucket_name, self.s3_client]):
            raise ValueError("Wasabi S3 environment variables not set.")
 
-    def generate_report(self, title: str, result: str, source_info: List[Dict]):
-        """Generates a PDF report, uploads to Wasabi S3, and cleans up."""
+    def generate_report(self, title: str, initial_summary: str, source_info: List[Dict], key_info: Dict):
+        """Generates PDF report, uploads to Wasabi, cleans up.  Now accepts key_info."""
         elements = []
 
         # Title (Centered)
         elements.append(Paragraph(title, self.styles['Heading1']))
         elements.append(Spacer(1, 0.2 * inch))
 
-        # Result (Parsed into sections and bullet points)
+        # Initial Summary (Problem, Steps, Solution)
         elements.append(Paragraph("Result:", self.styles['Heading2']))
         elements.append(Spacer(1, 0.1 * inch))
-        self._add_structured_result(elements, result)
+        self._add_structured_result(elements, initial_summary) # Use existing method
         elements.append(Spacer(1, 0.2 * inch))
 
+        # Key Information (NOW FORMATTED CORRECTLY)
+        elements.append(Paragraph("Key Information:", self.styles['Heading2']))
+        elements.append(Spacer(1, 0.1 * inch))
+        if key_info: # Check if key_info is not empty
+            key_info_list = []
+            for key, value in key_info.items():
+                if value and value.lower() != 'none':  # Don't include "None" entries
+                    key_info_list.append(Paragraph(f"{key.replace('_', ' ').title()}: {value}", self.styles['Bullet']))
+            list_flowable = ListFlowable(key_info_list, bulletType='bullet')
+            elements.append(list_flowable)
+        else: #if key_info is empty.
+            elements.append(Paragraph("No Key Information Extracted",self.styles['Normal']))
 
         # Source Information
         elements.append(Paragraph("Source Information:", self.styles['Heading2']))
         elements.append(Spacer(1, 0.1 * inch))
         for source in source_info:
-            elements.append(Paragraph(f"Source ID: {source.get('source_id', 'N_A')}", self.styles['Normal']))
+            elements.append(Paragraph(f"Source ID: {source.get('source_id', 'N/A')}", self.styles['Normal']))
             elements.append(Paragraph(f"Source Type: glpi_ticket", self.styles['Normal']))
             break  # Only add source info once
 
@@ -120,14 +132,14 @@ class PDFGenerator:
             title = sections[i].strip()
             content = sections[i + 1].strip() if i + 1 < len(sections) else ""
 
-            elements.append(Paragraph(title, self.styles['Heading2']))  # Apply Heading2 style
+            elements.append(Paragraph(title, self.styles['Heading2']))
 
             if title in ["Troubleshooting Steps:", "Solution:"]:
                 items = [item.strip() for item in content.split("*") if item.strip()]
-                if items: # Check if the list is not empty
+                if items:
                     list_flowable = ListFlowable(
                         [Paragraph(item, self.styles['Bullet']) for item in items],
-                        bulletType='bullet'  # Ensure bulletType is set
+                        bulletType='bullet'
                     )
                     elements.append(list_flowable)
             else:
