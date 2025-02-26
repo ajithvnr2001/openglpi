@@ -4,11 +4,11 @@ from langchain.chains import RetrievalQA
 from unstructured.partition.html import partition_html
 from typing import List, Dict
 from langchain_openai import OpenAI
-from langchain_huggingface import HuggingFaceEmbeddings  # Changed import
+from langchain_huggingface import HuggingFaceEmbeddings
 
 
 class LLMService:
-    def __init__(self, model_name: str = "Meta-Llama-3-1-8B-Instruct-FP8"):  # Default to a Llama3 model
+    def __init__(self, model_name: str = "Meta-Llama-3-1-8B-Instruct-FP8"):
         self.model_name = model_name
         self.akash_api_key = os.environ.get("AKASH_API_KEY")
         self.api_base = os.environ.get("AKASH_API_BASE", "https://chatapi.akash.network/api/v1")
@@ -17,19 +17,19 @@ class LLMService:
             raise ValueError("AKASH_API_KEY environment variable not set.")
 
         self.llm = OpenAI(
-            model=self.model_name,  # Use 'model' instead of 'model_name'
-            api_key=self.akash_api_key,  # Use 'api_key' instead of 'openai_api_key'
-            base_url=self.api_base,  # Use 'base_url' instead of 'openai_api_base'
+            model=self.model_name,
+            api_key=self.akash_api_key,
+            base_url=self.api_base,
             temperature=0.2,
-            max_tokens=500
+            max_tokens=700  # Increased max_tokens
         )
 
     def get_embedding_function(self):
-        """Returns the HuggingFace embedding function for BAAI/bge-large-en-v1.5."""
+        """Returns the HuggingFace embedding function."""
         return HuggingFaceEmbeddings(model_name="BAAI/bge-large-en-v1.5")
 
     def create_vectorstore(self, chunks: List[Dict]):
-        """Creates a Chroma vector store from a list of text chunks."""
+        """Creates a Chroma vector store from text chunks."""
         texts = [chunk["text"] for chunk in chunks]
         metadatas = [
             {key: value for key, value in chunk.items() if key != "text"}
@@ -44,7 +44,7 @@ class LLMService:
         qa = RetrievalQA.from_chain_type(
             llm=self.llm, chain_type="stuff", retriever=db.as_retriever(search_kwargs={'k': 1})
         )
-        result = qa.invoke({"query":query})["result"] # Use invoke and get result
+        result = qa.invoke({"query":query})["result"]
         return result
 
     def rag_completion(self, documents, query):
@@ -56,7 +56,7 @@ class LLMService:
     def process_documents_to_chunks(self, documents: List[Dict]) -> List[Dict]:
         """Processes GLPI documents and extracts text chunks."""
         chunks = []
-        list_tags = ["ul", "ol", "li"]  # List of tags to include as list items
+        list_tags = ["ul", "ol", "li"]
         for doc in documents:
             if "content" in doc:
                 content = doc["content"]
