@@ -30,7 +30,7 @@ _styles['Normal_C'] = ParagraphStyle(
     spaceAfter=6,
 )
 
-_styles['Bullet'] = ParagraphStyle(
+_styles['Bullet'] = ParagraphStyle( #Ensure the style for bullet.
     name='Bullet',
     fontSize=11,
     leftIndent=30,  # Ensure sufficient indentation
